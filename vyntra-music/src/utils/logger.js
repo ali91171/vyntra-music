@@ -1,63 +1,38 @@
 /**
  * Vyntra Music Bot - Logger Utility
- * Centralized logging using Winston with colored console output.
+ * Simple built-in logger (no external dependencies).
  */
 
-const { createLogger, format, transports } = require('winston');
-const { combine, timestamp, colorize, printf, errors } = format;
-const path = require('path');
 const config = require('../config/config');
 
-// Custom log format
-const logFormat = printf(({ level, message, timestamp, stack }) => {
-  const prefix = `[${timestamp}] [${level.toUpperCase()}]`;
-  return stack ? `${prefix} ${message}\n${stack}` : `${prefix} ${message}`;
-});
+const levels = { error: 0, warn: 1, info: 2, debug: 3 };
+const colors = {
+  error: '\x1b[31m',
+  warn:  '\x1b[33m',
+  info:  '\x1b[36m',
+  debug: '\x1b[90m',
+  reset: '\x1b[0m',
+};
 
-// Build transport list
-const transportList = [
-  new transports.Console({
-    format: combine(
-      colorize({ all: config.logging.colorize }),
-      timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-      errors({ stack: true }),
-      logFormat
-    ),
-  }),
-];
+const currentLevel = levels[config.logging.level] ?? levels.info;
 
-// Optionally log to files
-if (config.logging.logToFile) {
-  const fs = require('fs');
-  if (!fs.existsSync(config.logging.logDir)) {
-    fs.mkdirSync(config.logging.logDir, { recursive: true });
-  }
+function log(level, message) {
+  if (levels[level] > currentLevel) return;
 
-  transportList.push(
-    new transports.File({
-      filename: path.join(config.logging.logDir, 'error.log'),
-      level: 'error',
-      format: combine(
-        timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-        errors({ stack: true }),
-        logFormat
-      ),
-    }),
-    new transports.File({
-      filename: path.join(config.logging.logDir, 'combined.log'),
-      format: combine(
-        timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-        errors({ stack: true }),
-        logFormat
-      ),
-    })
+  const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  const color = colors[level] || colors.reset;
+  const label = level.toUpperCase().padEnd(5);
+
+  console[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'](
+    `${color}[${timestamp}] [${label}]${colors.reset} ${message}`
   );
 }
 
-const logger = createLogger({
-  level: config.logging.level,
-  transports: transportList,
-  exitOnError: false,
-});
+const logger = {
+  error: (msg) => log('error', msg),
+  warn:  (msg) => log('warn',  msg),
+  info:  (msg) => log('info',  msg),
+  debug: (msg) => log('debug', msg),
+};
 
 module.exports = logger;
